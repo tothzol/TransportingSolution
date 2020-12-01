@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -24,10 +25,14 @@ namespace TransportingSolution
             dgvTransport.RowCount = (int)nudSourceNum.Value + 1;
             foreach (DataGridViewRow r in dgvTransport.Rows) {
                 r.HeaderCell.Value = "";
+                
             }
+           
+            
             if (dgvTransport.RowCount > 2) {
                 DataGridViewRow row = dgvTransport.Rows[dgvTransport.RowCount - 1];
                 row.HeaderCell.Value = "Nyelők (Drains)";
+                
             }
         }
 
@@ -42,33 +47,48 @@ namespace TransportingSolution
             {
                 DataGridViewColumn column = dgvTransport.Columns[dgvTransport.ColumnCount - 1];
                 column.HeaderCell.Value = "Források (Sources)";
+                column.Width = 150;
 
             }
         }
 
-        private void Calculate() {
-            try {
-
-               
 
 
+        private void Calculate()
+        {
+
+            try
+            {
+                btnCalc.Enabled = false;
+                int ret;
+
+                for (int i = 0; i > dgvTransport.ColumnCount; i++) {
+
+                    for (int j = 0; j > dgvTransport.RowCount; j++)
+                    {
+                        if ((int.TryParse(dgvTransport[i, j].Value.ToString(), out ret) == false || dgvTransport[i, j].Value.ToString() != "T") && i!=dgvTransport.ColumnCount-1 && j!=dgvTransport.RowCount-1 ){
+                            throw new ILOG.Concert.Exception("A beviteli mezők értékének vagy egész számnak, vagy T-nek kell lennie!");
+                        }
+                    
+                    }
+                    }
+
+
+                
                 Cplex cplex = new Cplex();
-                float SumSources=0;
-                float SumDrains=0;
-                int sumValue;
                 int Supply = (int)nudSourceNum.Value;
                 int Drain = (int)nudDrainNum.Value;
-                int[][] Cmatrix = new int[Supply][];
-                int[] sources = new int[Supply];
-                int[] drains = new int[Drain];
+                
                 int[] temp;
-                INumVar[][] x = new INumVar[Supply][];
-                INumVar[][] y = new INumVar[Supply][];
+
+                int SumSources = 0;
+                int SumDrains = 0;
+                int sumValue;
 
                 sumValue = 0;
                 for (int i = 0; i < dgvTransport.RowCount - 1; i++)
                 {
-                    int.TryParse(dgvTransport[dgvTransport.ColumnCount - 1, i].Value.ToString(), out sumValue) ;
+                    int.TryParse(dgvTransport[dgvTransport.ColumnCount - 1, i].Value.ToString(), out sumValue);
                     SumSources += sumValue;
                 }
 
@@ -79,14 +99,16 @@ namespace TransportingSolution
                     SumDrains += sumValue;
                 }
 
-                if (SumSources != SumDrains) {
+                if (SumSources != SumDrains)
+                {
                     //Nyílt szállítási feladat
 
                     if (SumSources < SumDrains)
                     {
 
                         DataGridViewRow r = new DataGridViewRow();
-                        for (int i = 0; i < dgvTransport.ColumnCount - 2; i++)
+                        r.HeaderCell.Value = "FIKTÍV";
+                        for (int i = 0; i < dgvTransport.ColumnCount - 1; i++)
                         {
                             DataGridViewCell c = new DataGridViewTextBoxCell();
                             c.Value = 0;
@@ -94,36 +116,44 @@ namespace TransportingSolution
                         }
                         DataGridViewTextBoxCell cSupply = new DataGridViewTextBoxCell();
                         cSupply.Value = SumDrains - SumSources;
-                        dgvTransport.Rows.Insert(dgvTransport.RowCount - 2, r);
+                        r.Cells.Add(cSupply);
+                        dgvTransport.Rows.Insert(dgvTransport.RowCount - 1, r);
+                        Supply++;
                     }
                     //egyenlő itt nem lehet, mert csak akkor lép be, ha nem egyenlő a két érték
-                    else {
-                        DataGridViewTextBoxColumn col = new DataGridViewColumn();
-
-                        for (int i = 0; i < dgvTransport.RowCount - 2; i++)
+                    else
+                    {
+                        DataGridViewTextBoxColumn col = new DataGridViewTextBoxColumn();
+                        col.HeaderText = "FIKTÍV";
+                        dgvTransport.Columns.Insert(dgvTransport.ColumnCount - 1, col);
+                        for (int i = 0; i < dgvTransport.RowCount - 1; i++)
                         {
-                            DataGridViewCell c = new DataGridViewTextBoxCell();
-                            c.Value = 0;
-                     //       col.Cells.Add(c);
+                            dgvTransport[dgvTransport.ColumnCount - 2, i].Value = 0;
                         }
-                        DataGridViewTextBoxCell cDrain = new DataGridViewTextBoxCell();
-                        cSupply.Value = SumSources-SumDrains;
-                        dgvTransport.Columns.Insert(dgvTransport.ColumnCount - 2, col);
-
+                        dgvTransport[dgvTransport.ColumnCount - 2, dgvTransport.RowCount - 1].Value = SumSources - SumDrains;
+                        Drain++;
                     }
-                
+
                 }
 
-                for (int i = 0; i < (int)nudSourceNum.Value; i++) {
+                int[][] Cmatrix = new int[Supply][];
+                int[] sources = new int[Supply];
+                int[] drains = new int[Drain];
+
+                INumVar[][] x = new INumVar[Supply][];
+                INumVar[][] y = new INumVar[Supply][];
+
+                for (int i = 0; i < Supply; i++)
+                {
                     x[i] = cplex.NumVarArray(Drain, 0.0, int.MaxValue);
                     y[i] = cplex.NumVarArray(Drain, 0.0, int.MaxValue);
                 }
 
                 //források
 
-                for (int i = 0; i < dgvTransport.RowCount - 1; i++) {
+                for (int i = 0; i < dgvTransport.RowCount - 1; i++)
+                {
                     int.TryParse(dgvTransport[dgvTransport.ColumnCount - 1, i].Value.ToString(), out sources[i]);
-
                 }
                 //nyelők 
                 for (int i = 0; i < dgvTransport.ColumnCount - 1; i++)
@@ -131,15 +161,18 @@ namespace TransportingSolution
                     int.TryParse(dgvTransport[i, dgvTransport.RowCount - 1].Value.ToString(), out drains[i]);
                 }
 
-                //szám van-e mindenhol
+                //Coef Matrix
                 for (int i = 0; i < dgvTransport.RowCount - 1; i++)
                 {
                     temp = new int[Drain];
                     for (int j = 0; j < dgvTransport.ColumnCount - 1; j++)
                     {
 
-                        int.TryParse(dgvTransport[j, i].Value.ToString(), out temp[j]);
-
+                        if (dgvTransport[j, i].Value.ToString() != "T")
+                        {
+                            int.TryParse(dgvTransport[j, i].Value.ToString(), out temp[j]);
+                        }
+                        else temp[j] = int.MaxValue;
                     }
                     Cmatrix[i] = temp;
                 }
@@ -167,23 +200,47 @@ namespace TransportingSolution
                 cplex.AddMinimize(expr);
 
                 cplex.Solve();
-                MessageBox.Show(cplex.GetStatus().ToString());
+                MessageBox.Show("A megoldás: "+cplex.GetStatus().ToString());
+                lblSolutionType.Text = "A megoldás: " + cplex.GetStatus().ToString();
                 System.Console.WriteLine("Solution status = " + cplex.GetStatus());
                 System.Console.WriteLine(" - Solution: ");
+
+                dgvSolution.RowCount = Supply;
+                dgvSolution.ColumnCount = Drain;
+
                 for (int i = 0; i < Supply; ++i)
                 {
                     System.Console.Write("   " + i + ": ");
-                    for (int j = 0; j < Drain; ++j)
+                    for (int j = 0; j < Drain; ++j) { 
                         System.Console.Write("" + cplex.GetValue(x[i][j]) + "\t");
+                   dgvSolution[j, i].Value = cplex.GetValue(x[i][j]);
+                    }
                     System.Console.WriteLine();
                 }
                 System.Console.WriteLine("   Cost = " + cplex.ObjValue);
+                lblZValue.Text = "A célfüggvény értéke: " + cplex.ObjValue;
                 cplex.End();
+                
             }
-            catch (ILOG.Concert.Exception icex) {
-                MessageBox.Show(icex.Message);
+            catch (ILOG.Concert.Exception icex) { MessageBox.Show(icex.Message); }
             }
-            }
+
+
+        private void Clear() {
+            btnCalc.Enabled = true;
+            dgvSolution.ColumnCount = 0;
+            dgvSolution.RowCount = 0;
+            dgvTransport.ColumnCount = 0;
+                dgvTransport.RowCount = 0;
+                nudDrainNum.Value = 1;
+                nudSourceNum.Value = 1;
+            
+         
+        }
+
+
+
+
 
 
 
@@ -192,6 +249,12 @@ namespace TransportingSolution
         private void btnCalc_Click(object sender, EventArgs e)
         {
             Calculate();
+        }
+
+        private void btnReset_Click(object sender, EventArgs e)
+        {
+            Clear();
+            Clear();
         }
     }
 }
